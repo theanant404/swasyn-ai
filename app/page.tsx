@@ -1,34 +1,39 @@
 "use client";
-
+import dynamic from "next/dynamic";
 import { type SimplifyMedicalJargonOutput } from "@/ai/flows/simplify-medical-jargon";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { HeartPulse, Download } from "lucide-react";
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition } from "react";
 import { processReportAction } from "./actions";
-import UploadCard from "@/components/swasyn-ai/UploadCard";
-import ReportDisplay from "@/components/swasyn-ai/ReportDisplay";
-import ChatInterface from "@/components/swasyn-ai/ChatInterface";
 
-// export interface ChatMessage {
-//   role: "user" | "assistant";
-//   content: string;
-// }
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
 export default function Home() {
-  // const { toast } = useToast();
   const [reportData, setReportData] =
     useState<SimplifyMedicalJargonOutput | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isProcessingReport, startProcessReportTransition] = useTransition();
-
-  const originalReportText = useRef("");
-  const originalReportData = useRef<SimplifyMedicalJargonOutput | null>(null);
-
+  const [reportText, setReportText] = useState("");
+  const [originalReportData, setOriginalReportData] =
+    useState<SimplifyMedicalJargonOutput | null>(null);
+  const UploadCard = dynamic(
+    () => import("@/components/swasyn-ai/UploadCard"),
+    {
+      ssr: false,
+    }
+  );
+  const ReportDisplay = dynamic(
+    () => import("@/components/swasyn-ai/ReportDisplay"),
+    { ssr: false }
+  );
+  const ChatInterface = dynamic(
+    () => import("@/components/swasyn-ai/ChatInterface"),
+    { ssr: false }
+  );
   const handleProcessReport = (extractedText: string) => {
     if (!extractedText.trim()) {
       toast.error(
@@ -36,30 +41,32 @@ export default function Home() {
       );
       return;
     }
-    originalReportText.current = extractedText;
-    startProcessReportTransition(async () => {
-      const result = await processReportAction(originalReportText.current);
-      if (result.error) {
-        toast.error(result.error);
-      } else if (result.data) {
-        setReportData(result.data);
-        originalReportData.current = result.data;
-        setChatMessages([
-          {
-            role: "assistant",
-            content:
-              "Hello! I've analyzed your report. Feel free to ask me any questions about it.",
-          },
-        ]);
-      }
+    setReportText(extractedText);
+    startProcessReportTransition(() => {
+      void (async () => {
+        const result = await processReportAction(extractedText);
+        if (result.error) {
+          toast.error(result.error);
+        } else if (result.data) {
+          setReportData(result.data);
+          setOriginalReportData(result.data);
+          setChatMessages([
+            {
+              role: "assistant",
+              content:
+                "Hello! I've analyzed your report. Feel free to ask me any questions about it.",
+            },
+          ]);
+        }
+      })();
     });
   };
 
   const handleReset = () => {
     setReportData(null);
-    originalReportData.current = null;
+    setOriginalReportData(null);
     setChatMessages([]);
-    originalReportText.current = "";
+    setReportText("");
   };
 
   return (
@@ -105,14 +112,14 @@ export default function Home() {
               <ReportDisplay
                 reportData={reportData}
                 setReportData={setReportData}
-                originalReportData={originalReportData.current!}
+                originalReportData={originalReportData!}
               />
             </div>
             <div className="lg:col-span-1 lg:mt-0 mt-8">
               <ChatInterface
                 chatMessages={chatMessages}
                 setChatMessages={setChatMessages}
-                reportText={originalReportText.current}
+                reportText={reportText}
               />
             </div>
           </div>
